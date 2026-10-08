@@ -1,33 +1,19 @@
-import store from '../store';
+import { playerOffset } from './player';
 
 /**
- * Get current playback offset
+ * Get current playback offset in route-relative milliseconds.
  *
- * @param {object} state
+ * The video element is the clock: this reads the playback position maintained
+ * by src/timeline/player.js, falling back to the last redux-commanded offset
+ * while no video has attached yet.
+ *
+ * @param {object} state redux state (fallback source of the commanded offset)
  * @returns {number}
  */
 export function currentOffset(state = null) {
-  if (!state) {
-    state = store.getState();
+  const offset = playerOffset();
+  if (offset !== null) {
+    return offset;
   }
-
-  /** @type {number} */
-  let offset;
-  if (state.offset === null && state.loop?.startTime) {
-    offset = state.loop.startTime;
-  } else {
-    const playSpeed = state.isBufferingVideo ? 0 : state.desiredPlaySpeed;
-    offset = state.offset + ((Date.now() - state.startTime) * playSpeed);
-  }
-
-  if (offset !== null && state.loop?.startTime) {
-    // respect the loop
-    const loopOffset = state.loop.startTime;
-    if (offset < loopOffset) {
-      offset = loopOffset;
-    } else if (offset > loopOffset + state.loop.duration) {
-      offset = ((offset - loopOffset) % state.loop.duration) + loopOffset;
-    }
-  }
-  return offset;
+  return (state && state.offset) || 0;
 }
