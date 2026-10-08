@@ -93,14 +93,9 @@ export function detachVideoElement() {
     el.removeEventListener('pause', freeze);
     el.removeEventListener('waiting', freeze);
     el.removeEventListener('stalled', freeze);
-// current route offset in ms, or null when nothing has ever been played
-export function playerOffset() {
-  if (!anchor) {
-    return loop && loop.startTime !== null ? loop.startTime : null;
-  }
-  const raw = anchor.offset + (performance.now() - anchor.at) * anchor.rate;
-  return wrapLoop(raw);
-}
+    el.removeEventListener('playing', resume);
+    el.removeEventListener('ratechange', resume);
+    el.removeEventListener('ended', wrap);
     delete el.__playbackHandlers;
   }
   // keep the anchor alive: with the element gone (map view, route switch) the
@@ -123,7 +118,7 @@ export function setLoop(newLoop) {
 // current route offset in ms, or null when nothing has ever been played
 export function playerOffset() {
   if (!anchor) {
-    return null;
+    return loop && loop.startTime !== null ? loop.startTime : null;
   }
   const raw = anchor.offset + (performance.now() - anchor.at) * anchor.rate;
   return wrapLoop(raw);

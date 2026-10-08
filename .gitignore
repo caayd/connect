@@ -31,3 +31,7 @@ yarn-error.log*
 
 # Sentry Auth Token
 .env.sentry-build-plugin
+
+# agent worktrees / notes
+/.worktrees/
+/work-docs/
