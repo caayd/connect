@@ -9,7 +9,7 @@ import { api } from '../../api/backend';
 import Colors from '../../colors';
 import { ErrorOutline } from '../../icons';
 import { currentOffset } from '../../timeline';
-import { seek, bufferVideo } from '../../timeline/playback';
+import { seek } from '../../timeline/playback';
 import { isIos, isFirefox } from '../../utils/browser.js';
 
 // Leading-edge debounce: run immediately, then ignore calls until `wait` ms after the last one.
@@ -66,24 +66,6 @@ const VideoOverlay = ({ loading, error }) => {
   );
 };
 
-const getVideoState = (videoPlayer) => {
-  const currentTime = videoPlayer.getCurrentTime();
-  const { buffered } = videoPlayer.getInternalPlayer();
-
-  let bufferRemaining = -1;
-  for (let i = 0; i < buffered.length; i++) {
-    const end = buffered.end(i);
-    if (currentTime >= buffered.start(i) && currentTime <= end) {
-      bufferRemaining = end - currentTime;
-      break;
-    }
-  }
-
-  return {
-    bufferRemaining,
-    hasLoaded: bufferRemaining > 0,
-  };
-};
 
 class DriveVideo extends Component {
   constructor(props) {
@@ -127,21 +109,15 @@ class DriveVideo extends Component {
   }
 
   onVideoBuffering() {
-    const { dispatch, currentRoute } = this.props;
+    const { currentRoute } = this.props;
     const videoPlayer = this.videoPlayer.current;
     if (!videoPlayer || !currentRoute || !videoPlayer.getDuration()) {
-      dispatch(bufferVideo(true));
+      return;
     }
 
     if (this.firstSeek) {
       this.firstSeek = false;
       videoPlayer.seekTo(this.currentVideoTime(), 'seconds');
-    }
-
-    const { hasLoaded } = getVideoState(videoPlayer);
-    const { readyState } = videoPlayer.getInternalPlayer();
-    if (!hasLoaded || readyState < 2) {
-      dispatch(bufferVideo(true));
     }
   }
 
@@ -149,8 +125,6 @@ class DriveVideo extends Component {
    * @param {Error} e
    */
   onHlsError(e) {
-    const { dispatch } = this.props;
-    dispatch(bufferVideo(true));
 
     if (e.type === 'mediaError' && (e.details === 'bufferStalledError' || e.details === 'bufferNudgeOnStall')) {
       // buffer but no error
@@ -192,8 +166,6 @@ class DriveVideo extends Component {
       return;
     }
 
-    const { dispatch } = this.props;
-    dispatch(bufferVideo(true));
 
     if (e.type === 'networkError') {
       console.error('Network error', { e, data });
@@ -230,7 +202,7 @@ class DriveVideo extends Component {
   }
 
   syncVideo() {
-    const { dispatch, isBufferingVideo, isMuted } = this.props;
+    const { dispatch, isMuted } = this.props;
     const videoPlayer = this.videoPlayer.current;
     if (!videoPlayer || !videoPlayer.getInternalPlayer() || !videoPlayer.getDuration()) {
       return;
@@ -256,15 +228,6 @@ class DriveVideo extends Component {
 
     const internalPlayer = videoPlayer.getInternalPlayer();
 
-    const { hasLoaded } = getVideoState(videoPlayer);
-    if (isBufferingVideo && internalPlayer.readyState >= 4) {
-      dispatch(bufferVideo(false));
-    } else if (isBufferingVideo || !hasLoaded || internalPlayer.readyState < 2) {
-      if (!isBufferingVideo) {
-        dispatch(bufferVideo(true));
-      } 
-      newPlaybackRate = 0; // in some circumstances, iOS won't update readyState unless temporarily paused
-    }
 
     if (videoPlayer.getInternalPlayer('hls')) {
       if (!internalPlayer.paused && newPlaybackRate === 0) {
@@ -300,7 +263,7 @@ class DriveVideo extends Component {
   }
 
   render() {
-    const { desiredPlaySpeed, isBufferingVideo, currentRoute, onAudioStatusChange, isMuted } = this.props;
+    const { desiredPlaySpeed, currentRoute, onAudioStatusChange, isMuted } = this.props;
     const { src, videoError } = this.state;
 
     const onPlayerReady = (player) => {
@@ -325,7 +288,7 @@ class DriveVideo extends Component {
 
     return (
       <div className="min-h-[200px] relative max-w-[964px] m-[0_auto] aspect-[1.593]">
-        <VideoOverlay loading={isBufferingVideo} error={videoError} />
+        <VideoOverlay error={videoError} />
         <ReactPlayer
           ref={this.videoPlayer}
           url={src}
@@ -356,8 +319,6 @@ const stateToProps = (state) => ({
   dongleId: state.dongleId,
   desiredPlaySpeed: state.desiredPlaySpeed,
   offset: state.offset,
-  startTime: state.startTime,
-  isBufferingVideo: state.isBufferingVideo,
   routes: state.routes,
   currentRoute: state.currentRoute,
 });
