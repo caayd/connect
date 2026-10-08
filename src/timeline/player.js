@@ -15,6 +15,34 @@
 // playing, ratechange, waiting, ...) so extrapolation error stays bounded to
 // one timeupdate interval (~250ms) at most, and is corrected immediately.
 
+
+// Subscribe the clock to redux so commands work even while the element is
+// detached (map view, before DriveVideo mounts). DriveVideo also applies
+// these through props for the attached element; both paths converge on the
+// same anchor so double-application is a no-op.
+export function bindStore(store) {
+  let prev = store.getState();
+  setLoop(prev.loop);
+  return store.subscribe(() => {
+    const state = store.getState();
+
+    if (state.loop !== prev.loop) {
+      setLoop(state.loop);
+      // the loop moved: pull playback into the new range
+      const offset = playerOffset();
+      if (offset !== null && offset !== wrapLoop(offset)) {
+        seekVideo(offset);
+      }
+    }
+    if (state.offset !== prev.offset && state.offset !== null && state.offset !== undefined) {
+      seekVideo(state.offset);
+    }
+    if (state.desiredPlaySpeed !== prev.desiredPlaySpeed && anchor) {
+      anchor.rate = state.desiredPlaySpeed || 0;
+    }
+    prev = state;
+  });
+}
 let el = null;           // the attached <video> element, or null
 let route = null;        // currentRoute; provides videoStartOffset + duration
 let loop = null;         // { startTime, duration } route-ms; set by DriveVideo
