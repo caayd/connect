@@ -44,7 +44,7 @@ class DriveVideo extends Component {
     this.videoRef = React.createRef();
     this.hls = null;
     this.src = '';
-    this.pendingSeek = false;
+    this.pendingSeek = null;
 
     this.state = {
       src: '',
@@ -63,6 +63,9 @@ class DriveVideo extends Component {
 
   componentDidMount() {
     const { currentRoute, loop, offset } = this.props;
+    // resume where the clock currently is, not the last commanded offset:
+    // the video may have been unmounted (map view) while playback continued
+    const resumeOffset = player.playerOffset();
     const video = this.videoRef.current;
     if (video) {
       player.attachVideoElement(video, currentRoute);
@@ -70,8 +73,9 @@ class DriveVideo extends Component {
     player.setRoute(currentRoute);
     player.setLoop(loop);
     this.setVideoSource(currentRoute);
-    if (offset !== null && offset !== undefined) {
-      this.seek(offset);
+    const target = resumeOffset ?? offset;
+    if (target !== null && target !== undefined) {
+      this.seek(target);
     }
     this.applyPlayback(this.props);
   }
@@ -148,7 +152,7 @@ class DriveVideo extends Component {
   }
 
   seek(offset) {
-    this.pendingSeek = true;
+    this.pendingSeek = offset;
     player.seekVideo(offset);
   }
 
@@ -211,15 +215,16 @@ class DriveVideo extends Component {
   }
 
   reapplyPendingSeek() {
-    const { currentRoute, offset } = this.props;
-    if (!this.pendingSeek || offset === null || offset === undefined) return;
+    const { currentRoute } = this.props;
+    const target = this.pendingSeek;
+    if (target === null || target === undefined) return;
 
-    const desiredTime = Math.max(0, (offset - (currentRoute?.videoStartOffset || 0)) / 1000);
+    const desiredTime = Math.max(0, (target - (currentRoute?.videoStartOffset || 0)) / 1000);
     const video = this.videoRef.current;
     if (!video || Math.abs(video.currentTime - desiredTime) > 0.01) {
-      player.seekVideo(offset);
+      player.seekVideo(target);
     }
-    this.pendingSeek = false;
+    this.pendingSeek = null;
   }
 
   onHlsError(_event, data) {
