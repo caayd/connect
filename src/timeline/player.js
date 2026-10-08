@@ -47,6 +47,34 @@ function wrapLoop(offset) {
   return offset;
 }
 
+function applyOffsetToElement(offsetMs) {
+  const videoTime = Math.max(0, (offsetMs - (route?.videoStartOffset || 0)) / 1000);
+  if (el) {
+    el.currentTime = videoTime;
+    syncAnchor();
+  }
+  anchor = { offset: offsetMs, at: performance.now(), rate: anchor?.rate ?? 0 };
+}
+
+// enforce the loop on the element itself: wrap back to the loop start as soon
+// as playback passes the end instead of waiting for the 'ended' event, which
+// only fires at the end of the whole stream
+function enforceLoop() {
+  if (!el || !loop || loop.startTime === null) {
+    syncAnchor();
+    return;
+  }
+  const offset = el.currentTime * 1000 + (route?.videoStartOffset || 0);
+  const end = loop.startTime + loop.duration;
+  if (offset >= end) {
+    applyOffsetToElement(loop.startTime + ((offset - end) % loop.duration));
+  } else if (offset < loop.startTime) {
+    applyOffsetToElement(loop.startTime);
+  } else {
+    syncAnchor();
+  }
+}
+
 // DriveVideo calls this once per mounted video element.
 export function attachVideoElement(videoEl, currentRoute) {
   route = currentRoute;
@@ -55,21 +83,10 @@ export function attachVideoElement(videoEl, currentRoute) {
   const update = () => syncAnchor();
   const freeze = () => syncAnchor(0);     // waiting/stalled: clock stops with media
   const resume = () => syncAnchor();      // playing/ratechange: clock resumes at media rate
-  const wrap = () => {
-    // enforce the loop without waiting for a redux round-trip
-    const offset = playerOffset();
-    if (offset !== null && loop && loop.startTime !== null) {
-      const end = loop.startTime + loop.duration;
-      if (offset >= end || offset < loop.startTime) {
-        applyOffsetToElement(wrapLoop(offset));
-      } else {
-        syncAnchor();
-      }
-    }
-  };
+  const wrap = () => enforceLoop();
 
   const handlers = { update, freeze, resume, wrap };
-  el.addEventListener('timeupdate', update);
+  el.addEventListener('timeupdate', wrap);  // wrap == enforceLoop + syncAnchor
   el.addEventListener('seeked', update);
   el.addEventListener('play', update);
   el.addEventListener('pause', freeze);
@@ -87,7 +104,7 @@ export function attachVideoElement(videoEl, currentRoute) {
 export function detachVideoElement() {
   if (el?.__playbackHandlers) {
     const { update, freeze, resume, wrap } = el.__playbackHandlers;
-    el.removeEventListener('timeupdate', update);
+    el.removeEventListener('timeupdate', wrap);
     el.removeEventListener('seeked', update);
     el.removeEventListener('play', update);
     el.removeEventListener('pause', freeze);
@@ -122,15 +139,6 @@ export function playerOffset() {
   }
   const raw = anchor.offset + (performance.now() - anchor.at) * anchor.rate;
   return wrapLoop(raw);
-}
-
-function applyOffsetToElement(offsetMs) {
-  const videoTime = Math.max(0, (offsetMs - (route?.videoStartOffset || 0)) / 1000);
-  if (el) {
-    el.currentTime = videoTime;
-    syncAnchor();
-  }
-  anchor = { offset: offsetMs, at: performance.now(), rate: anchor?.rate ?? 0 };
 }
 
 // Command: seek the playback clock to a route offset (ms). Works while the

@@ -271,6 +271,7 @@ class DriveVideo extends Component {
           onPlaying={this.onVideoPlaying}
           onCanPlay={this.onCanPlay}
           onLoadedMetadata={this.onLoadedMetadata}
+          onError={this.onVideoError}
         />
       </div>
     );
